@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import localFont from "next/font/local";
 import { CalendarDays, FileText, Receipt, Loader2, AlertCircle, RefreshCw, QrCode, Clock, Users, AlertTriangle, MessageCircle, MapPin, RefreshCcw } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -11,7 +11,17 @@ import { PrescriptionModal } from "@/components/PrescriptionModal";
 import { cn } from "@/lib/utils";
 import type { Patient, Appointment, Prescription, Bill, QueueStatus, QueueAppointment } from "@/types/patient";
 
-const plusJakartaSans = Plus_Jakarta_Sans({ subsets: ["latin"], weight: ["400","500","600","700","800"], variable: "--font-jakarta" });
+const plusJakartaSans = localFont({
+  src: [
+    { path: "../../fonts/plus-jakarta-sans/PlusJakartaSans-400.ttf", weight: "400", style: "normal" },
+    { path: "../../fonts/plus-jakarta-sans/PlusJakartaSans-500.ttf", weight: "500", style: "normal" },
+    { path: "../../fonts/plus-jakarta-sans/PlusJakartaSans-600.ttf", weight: "600", style: "normal" },
+    { path: "../../fonts/plus-jakarta-sans/PlusJakartaSans-700.ttf", weight: "700", style: "normal" },
+    { path: "../../fonts/plus-jakarta-sans/PlusJakartaSans-800.ttf", weight: "800", style: "normal" },
+  ],
+  variable: "--font-jakarta",
+  display: "swap",
+});
 
 interface ApiResponse<T> { success: boolean; data: T; message?: string }
 interface DashboardContentProps { slug?: string }
