@@ -1,8 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { enforceProductionEnv } from "../../backend/utils/env-validation";
-
-enforceProductionEnv();
 
 export const viewport: Viewport = {
   width: "device-width",
