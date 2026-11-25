@@ -2,12 +2,12 @@ import { createOTP, findLatestOTP, findLatestMobileOTP, verifyOTPMark } from "..
 import { generateOTP } from "../utils/otp";
 import nodemailer from "nodemailer";
 import { env } from "../config/env";
-import { sendOTPviaSMS } from "../utils/sms";
+import { sendOTPviaWhatsApp } from "../utils/whatsapp";
 
 const isProd = () => process.env.NODE_ENV === "production";
 
-const emailUsername = env.EMAIL_USERNAME.trim();
-const emailPassword = env.EMAIL_PASSWORD.replace(/\s/g, "");
+const emailUsername = env.EMAIL_USERNAME?.trim() || "";
+const emailPassword = env.EMAIL_PASSWORD?.replace(/\s/g, "") || "";
 const smtpConfigured = Boolean(emailUsername && emailPassword && env.EMAIL_HOST);
 
 console.log("[OTP Mailer] SMTP config", {
@@ -22,28 +22,27 @@ const transporter = nodemailer.createTransport({
   port: Number(env.EMAIL_PORT),
   secure: Number(env.EMAIL_PORT) === 465,
   auth: smtpConfigured ? { user: emailUsername, pass: emailPassword } : undefined,
+  // Brevo requires explicit TLS on port 587
+  requireTLS: Number(env.EMAIL_PORT) === 587,
 });
 
-export const requestOTP = async (email: string, mobile?: string) => {
-  const otp = generateOTP();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+interface OTPEmailResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}
 
-  await createOTP({ email, otp, expiresAt });
+const sendOTPEmail = async (email: string, otp: string): Promise<OTPEmailResult> => {
+  const year = new Date().getFullYear();
+  const digits = otp
+    .split("")
+    .map(
+      (d) =>
+        `<td style="padding:0 4px;"><div style="width:44px;height:52px;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;font-size:24px;font-weight:700;color:#111827;font-family:monospace;text-align:center;line-height:52px;">${d}</div></td>`
+    )
+    .join("");
 
-  try {
-    if (isProd() && !smtpConfigured) {
-      throw new Error("SMTP not configured for production email OTP delivery");
-    }
-    const year = new Date().getFullYear();
-    const digits = otp
-      .split("")
-      .map(
-        (d) =>
-          `<td style="padding:0 4px;"><div style="width:44px;height:52px;background:#f9fafb;border:1.5px solid #e5e7eb;border-radius:10px;font-size:24px;font-weight:700;color:#111827;font-family:monospace;text-align:center;line-height:52px;">${d}</div></td>`
-      )
-      .join("");
-
-    const html = `<!DOCTYPE html>
+  const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
@@ -93,56 +92,50 @@ export const requestOTP = async (email: string, mobile?: string) => {
 </body>
 </html>`;
 
-    // Dev bypass: when SMTP creds are not configured, print OTP to server
-    // console instead of attempting to send a real email.
-    if (isProd()) {
-      if (!emailUsername || !emailPassword) {
-        throw new Error("SMTP not configured for production email OTP delivery");
-      }
-      await transporter.sendMail({
-        from: Object.is(env.EMAIL_USERNAME, "")
-          ? '"clickmyQPro" <no-reply@clickmyq.com>'
-          : `"clickmyQPro" <${env.EMAIL_USERNAME}>`,
-        to: email,
-        subject: "Your Verification Code – clickmyQPro",
-        text: `Your OTP is: ${otp}\n\nValid for 10 minutes. Do not share this code.`,
-        html,
-      });
-    } else if (!emailUsername || !emailPassword) {
-      console.log(`[OTP][DEV-BYPASS] Email: ${email} → OTP: ${otp} (SMTP not configured)`);
-    } else {
-      await transporter.sendMail({
-        from: Object.is(env.EMAIL_USERNAME, "")
-          ? '"clickmyQPro" <no-reply@clickmyq.com>'
-          : `"clickmyQPro" <${env.EMAIL_USERNAME}>`,
-        to: email,
-        subject: "Your Verification Code – clickmyQPro",
-        text: `Your OTP is: ${otp}\n\nValid for 10 minutes. Do not share this code.`,
-        html,
-      });
-    }
+  const mailOptions = {
+    from: emailUsername ? `"clickmyQPro" <${emailUsername}>` : '"clickmyQPro" <no-reply@clickmyq.com>',
+    to: email,
+    subject: "Your Verification Code – clickmyQPro",
+    text: `Your OTP is: ${otp}\n\nValid for 10 minutes. Do not share this code.`,
+    html,
+  };
+
+  if (!smtpConfigured) {
+    console.log(`[OTP][DEV-MODE] SMTP not configured. OTP for ${email} not sent via email.`);
+    return { success: false, error: "SMTP not configured" };
+  }
+
+  try {
+    const info = await transporter.sendMail(mailOptions);
+    console.log(`[OTP] Email sent successfully to ${email}, messageId: ${info.messageId}`);
+    return { success: true, messageId: info.messageId };
   } catch (error: any) {
-    console.error("Failed to send email", error);
+    const errorMsg = error.message || "Unknown error";
+    console.error(`[OTP] Failed to send email to ${email}:`, errorMsg);
+    
+    // Don't expose OTP in logs
     if (isProd()) {
-      throw new Error("Failed to send OTP email in production");
+      throw new Error(`Failed to send OTP email: ${errorMsg}`);
     }
-    // Fallback: still surface the OTP in the server console so testing can
-    // proceed when the SMTP send fails (no real email leaves the machine).
-    console.log(`[OTP][DEV-BYPASS] Email send failed → Email: ${email} → OTP: ${otp}`);
+    
+    // In development, return failure but don't log OTP
+    return { success: false, error: errorMsg };
   }
+};
 
-  // Send OTP via SMS if mobile number is provided
-  if (mobile) {
-    if (isProd()) {
-      const twilioConfigured = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER);
-      if (!twilioConfigured) {
-        throw new Error("Twilio not configured for production SMS OTP delivery");
-      }
-    }
-    sendOTPviaSMS(mobile, otp).catch(() => {});
-  }
+export const requestOTP = async (email: string) => {
+  const otp = generateOTP();
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
-  return { message: "OTP sent successfully" };
+  await createOTP({ email, otp, expiresAt });
+
+  // Send email OTP only
+  const emailResult = await sendOTPEmail(email, otp);
+
+  return {
+    message: emailResult.success ? "OTP sent successfully" : "OTP generated but delivery failed",
+    email: { success: emailResult.success, messageId: emailResult.messageId, error: emailResult.error },
+  };
 };
 
 export const verifyOTP = async (email: string, otp: string) => {
@@ -159,22 +152,18 @@ export const verifyOTP = async (email: string, otp: string) => {
 };
 
 /* ── Patient mobile login OTP ───────────────────────────────
-   Sends OTP to the patient's mobile: real SMS via Twilio when
-   configured, otherwise dev-bypass (console log). Returns
-   devOtp ONLY in bypass mode so demo/testing stays possible. */
+   Sends OTP to the patient's mobile via WhatsApp (renflair.in API). */
 export const requestMobileOTP = async (mobile: string) => {
   const otp = generateOTP();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
   await createOTP({ email: `patient:${mobile}`, mobile, otp, expiresAt } as any);
 
-  const twilioConfigured = Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER);
-  await sendOTPviaSMS(mobile, otp);
+  const whatsappResult = await sendOTPviaWhatsApp(mobile, otp);
 
   return {
-    message: "OTP sent successfully",
-    // Only exposed when SMS provider is not configured — dev/testing aid
-    ...(twilioConfigured ? {} : { devOtp: otp, devMode: true }),
+    message: whatsappResult.success ? "OTP sent successfully via WhatsApp" : "OTP generated but WhatsApp delivery failed",
+    sms: { success: whatsappResult.success, messageId: whatsappResult.messageId, error: whatsappResult.error },
   };
 };
 

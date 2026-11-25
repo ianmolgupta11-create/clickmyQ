@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -16,6 +16,32 @@ export default function LoginPage() {
   const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
   const [success, setSuccess] = useState(false);
   const [trialPopup, setTrialPopup] = useState<{ type: string; message: string } | null>(null);
+  const [rememberMe, setRememberMe] = useState(false);
+
+  // If a valid session already exists, redirect to the appropriate dashboard
+  useEffect(() => {
+    let mounted = true;
+    const checkSession = async () => {
+      try {
+        const res = await fetch("/api/auth/me", { credentials: "include" });
+        if (res.ok && mounted) {
+          const data = await res.json();
+          if (data.success && data.data?.role) {
+            const role = data.data.role;
+            if (role === "SUPER_ADMIN") router.push("/superadmin/dashboard");
+            else if (role === "DOCTOR") router.push("/doctor/dashboard");
+            else if (role === "RECEPTIONIST" || role === "STAFF") router.push("/staff/dashboard");
+            else if (role === "SUB_DEPT_HEAD") router.push("/subdept/dashboard");
+            else if (role === "FINANCE_HEAD") router.push("/finance/dashboard");
+            else if (role === "DEPT_HEAD") router.push("/parentdept/dashboard");
+            else router.push("/hospitaladmin/dashboard");
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    checkSession();
+    return () => { mounted = false; };
+  }, [router]);
 
   const [fpOpen, setFpOpen] = useState(false);
   const [fpStep, setFpStep] = useState<FpStep>("email");
@@ -49,7 +75,7 @@ export default function LoginPage() {
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }), credentials: "include",
+        body: JSON.stringify({ email, password, rememberMe }), credentials: "include",
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -321,6 +347,17 @@ export default function LoginPage() {
                 </button>
               </div>
               {fieldErrors.password && <span className="mn-ferr">{fieldErrors.password}</span>}
+            </div>
+
+            <div className="mn-field-row" style={{marginTop: 6, marginBottom: 10}}>
+              <input
+                id="remember-me"
+                type="checkbox"
+                className="w-4 h-4 rounded border-secondary-300 text-primary-600 focus:ring-primary-500"
+                checked={rememberMe}
+                onChange={e => setRememberMe(e.target.checked)}
+              />
+              <label htmlFor="remember-me" className="ml-2 text-sm text-slate-600 cursor-pointer select-none">Remember me</label>
             </div>
 
             <button type="submit" className="mn-auth-btn" disabled={loading || success}>

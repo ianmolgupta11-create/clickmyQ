@@ -17,8 +17,11 @@ export async function POST(req: NextRequest) {
       return errorResponse("Validation Failed", 400, result.error.issues);
     }
 
-    const res = await requestOTP(result.data.email, result.data.mobile);
-    return successResponse(res, "OTP Request sent");
+    const res = await requestOTP(result.data.email);
+    
+    // Return 200 if OTP was generated, but include delivery status
+    // Client can check res.email.success and res.sms?.success
+    return successResponse(res, res.message);
   } catch (error: any) {
     return errorResponse(error.message, 500);
   }

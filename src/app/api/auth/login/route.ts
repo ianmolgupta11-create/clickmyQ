@@ -6,6 +6,7 @@ import { z } from "zod";
 const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
+  rememberMe: z.boolean().optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -23,7 +24,10 @@ export async function POST(req: NextRequest) {
 
     // Extract env variable conditionally to handle type warnings
     const secureFlag = process.env.NODE_ENV === "production";
-    
+
+    // Remember Me: 30 days when checked, otherwise 7 days (session persists across browser restarts)
+    const maxAge = result.data.rememberMe ? 30 * 24 * 60 * 60 : 7 * 24 * 60 * 60;
+
     // Set HTTP-only Cookie
     response.cookies.set({
       name: "hms_session",
@@ -32,7 +36,7 @@ export async function POST(req: NextRequest) {
       secure: secureFlag,
       sameSite: "strict",
       path: "/",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      maxAge,
     });
 
     return response;

@@ -58,8 +58,12 @@ export async function POST(req: NextRequest) {
 
     const result = await requestMobileOTP(digits);
     return successResponse(
-      { sent: true, maskedMobile: `••••• ${digits.slice(-4)}`, ...(result as any) },
-      "OTP sent"
+      {
+        sent: result.sms?.success ?? false,
+        maskedMobile: `••••• ${digits.slice(-4)}`,
+        sms: result.sms,
+      },
+      result.message
     );
   } catch (e: any) {
     return errorResponse(e.message || "Failed to send OTP", 500);

@@ -16,8 +16,7 @@ const schema = z.object({
 /* ── POST /api/patient/auth/register-request-otp ──
    Step 1 of patient registration. Sends an OTP to a NEW patient's mobile
    (no existing patient record required). Returns an error if the mobile is
-   already registered — those users should use the login flow instead.
-   Dev-bypass OTP exposed when Twilio is not configured. */
+   already registered — those users should use the login flow instead. */
 export async function POST(req: NextRequest) {
   try {
     const parsed = schema.safeParse(await req.json().catch(() => ({})));
@@ -42,16 +41,14 @@ export async function POST(req: NextRequest) {
     const digits = mobile.replace(/\D/g, "").slice(-10);
     if (digits.length < 10) return errorResponse("Enter a valid 10-digit mobile number", 400);
 
-    // Send OTP regardless of existing registrations — uniqueness is no
-    // longer enforced; callers decide how to handle multiple matches.
     const result = await requestMobileOTP(digits);
     return successResponse(
       {
-        sent: true,
+        sent: result.sms?.success ?? false,
         maskedMobile: `••••• ${digits.slice(-4)}`,
-        ...(result as any),
+        sms: result.sms,
       },
-      "OTP sent"
+      result.message
     );
   } catch (e: any) {
     return errorResponse(e.message || "Failed to send OTP", 500);

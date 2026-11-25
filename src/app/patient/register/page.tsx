@@ -23,7 +23,6 @@ function RegisterInner() {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const [devOtp, setDevOtp] = useState("");
   const [resendIn, setResendIn] = useState(0);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -54,7 +53,6 @@ function RegisterInner() {
       });
       const d = await r.json();
       if (d.success) {
-        if (d.data?.devOtp) setDevOtp(d.data.devOtp);
         setStep(2); setResendIn(30);
         setTimeout(() => otpRefs.current[0]?.focus(), 100);
       } else setMsg(d.message || "Failed to send OTP");
@@ -128,14 +126,9 @@ function RegisterInner() {
 
             {step === 2 && (
               <>
-                <button onClick={() => { setStep(1); setOtp(["", "", "", "", "", ""]); setDevOtp(""); }} className="flex items-center gap-1.5 text-secondary-500 text-sm font-semibold mb-4 hover:text-secondary-700">
+                <button onClick={() => { setStep(1); setOtp(["", "", "", "", "", ""]); }} className="flex items-center gap-1.5 text-secondary-500 text-sm font-semibold mb-4 hover:text-secondary-700">
                   <ArrowLeft className="w-4 h-4" /> Edit details
                 </button>
-                {devOtp && (
-                  <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 mb-4">
-                    🔧 Dev mode (SMS not configured) — your OTP is <strong className="font-mono text-base">{devOtp}</strong>
-                  </div>
-                )}
                 <div className="flex gap-2 justify-center mb-5">
                   {otp.map((d, i) => (
                     <input key={i} ref={(el) => { otpRefs.current[i] = el; }} type="tel" inputMode="numeric" maxLength={1} value={d}

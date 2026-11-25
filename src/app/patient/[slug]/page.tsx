@@ -23,7 +23,6 @@ function PortalInner() {
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
-  const [devOtp, setDevOtp] = useState("");
   const [resendIn, setResendIn] = useState(0);
   const [redirecting, setRedirecting] = useState(false);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
@@ -67,7 +66,6 @@ function PortalInner() {
       });
       const d = await r.json();
       if (d.success) {
-        if (d.data?.devOtp) setDevOtp(d.data.devOtp);
         setStep(2); setResendIn(30);
         setTimeout(() => otpRefs.current[0]?.focus(), 100);
       } else {
@@ -231,11 +229,6 @@ function PortalInner() {
             <div style={{ fontSize: 13, color: "#94a3b8", marginBottom: 16 }}>
               Code sent to ••••• {mobile.replace(/\D/g, "").slice(-4)}
             </div>
-            {devOtp && (
-              <div style={{ fontSize: 11.5, color: "#92400e", background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 10, padding: "8px 12px", marginBottom: 12 }}>
-                🔧 Dev mode (SMS not configured) — your OTP is <strong style={{ fontFamily: "monospace", fontSize: 13 }}>{devOtp}</strong>
-              </div>
-            )}
             <div style={{ display: "flex", gap: 8, justifyContent: "center", marginBottom: 14 }}>
               {otp.map((d, i) => (
                 <input

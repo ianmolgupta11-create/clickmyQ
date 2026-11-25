@@ -11,6 +11,9 @@ const envSchema = z.object({
   SUPER_ADMIN_EMAIL: z.string().email(),
   SUPER_ADMIN_PASSWORD: z.string(),
   SUPER_ADMIN_SECURITY_KEY: z.string(),
+  WHATSAPP_API_KEY: z.string().optional(),
+  WHATSAPP_COUNTRY_CODE: z.string().default("91"),
+  WHATSAPP_BASE_URL: z.string().default("https://whatsapp.renflair.in/V1.php"),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -39,6 +42,9 @@ function getEnv(): Env {
       SUPER_ADMIN_EMAIL: "placeholder@example.com",
       SUPER_ADMIN_PASSWORD: "placeholder",
       SUPER_ADMIN_SECURITY_KEY: "placeholder",
+      WHATSAPP_API_KEY: "placeholder",
+      WHATSAPP_COUNTRY_CODE: "91",
+      WHATSAPP_BASE_URL: "https://whatsapp.renflair.in/V1.php",
     } as Env;
   }
 

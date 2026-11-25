@@ -13,15 +13,21 @@ const getClient = () => {
   return client;
 };
 
-export const sendOTPviaSMS = async (mobile: string, otp: string) => {
+interface SMSResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+  bypass?: boolean;
+}
+
+export const sendOTPviaSMS = async (mobile: string, otp: string): Promise<SMSResult> => {
   const twilioConfigured = Boolean(accountSid && authToken && fromPhone);
   if (isProd() && !twilioConfigured) {
     throw new Error("Twilio not configured for production SMS delivery");
   }
   if (!twilioConfigured) {
-    // Dev bypass: log OTP to server console instead of sending a real SMS
-    console.log(`[SMS][DEV-BYPASS] OTP for ${mobile}: ${otp} (Twilio not configured)`);
-    return { success: true, bypass: true };
+    console.log(`[SMS][DEV-MODE] Twilio not configured. OTP for ${mobile} not sent via SMS.`);
+    return { success: false, error: "Twilio not configured", bypass: true };
   }
 
   // Ensure the mobile number has a country code (default to +91 for India)
@@ -30,17 +36,19 @@ export const sendOTPviaSMS = async (mobile: string, otp: string) => {
   try {
     const c = getClient();
     if (!c) throw new Error("Twilio client not initialized");
-    await c.messages.create({
+    const message = await c.messages.create({
       body: `Your clickmyQPro verification code is: ${otp}. Valid for 10 minutes. Do not share this code.`,
       from: fromPhone,
       to,
     });
-    console.log(`[SMS] OTP sent successfully to ${to}`);
-    return { success: true };
-  } catch (error) {
-    console.error("[SMS] Failed to send OTP via SMS:", error);
+    console.log(`[SMS] OTP sent successfully to ${to}, messageId: ${message.sid}`);
+    return { success: true, messageId: message.sid };
+  } catch (error: any) {
+    const errorMsg = error.message || "Unknown error";
+    console.error(`[SMS] Failed to send OTP via SMS to ${to}:`, errorMsg);
     if (isProd()) throw error;
-    console.log(`[SMS][DEV-BYPASS] OTP for ${mobile}: ${otp} (Twilio send failed)`);
-    return { success: true, bypass: true };
+    // Don't expose OTP in logs
+    console.log(`[SMS][DEV-MODE] SMS send failed for ${to}: ${errorMsg}`);
+    return { success: false, error: errorMsg, bypass: true };
   }
 };
