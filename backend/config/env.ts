@@ -14,6 +14,8 @@ const envSchema = z.object({
   WHATSAPP_API_KEY: z.string().optional(),
   WHATSAPP_COUNTRY_CODE: z.string().default("91"),
   WHATSAPP_BASE_URL: z.string().default("https://whatsapp.renflair.in/V1.php"),
+  SMS_API_KEY: z.string().optional(),
+  SMS_BASE_URL: z.string().default("https://sms.renflair.in/V1.php"),
 });
 
 type Env = z.infer<typeof envSchema>;
@@ -45,6 +47,8 @@ function getEnv(): Env {
       WHATSAPP_API_KEY: "placeholder",
       WHATSAPP_COUNTRY_CODE: "91",
       WHATSAPP_BASE_URL: "https://whatsapp.renflair.in/V1.php",
+      SMS_API_KEY: "placeholder",
+      SMS_BASE_URL: "https://sms.renflair.in/V1.php",
     } as Env;
   }
 

@@ -22,6 +22,7 @@ function LoginInner() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
   const [resendIn, setResendIn] = useState(0);
+  const [otpChannel, setOtpChannel] = useState<"whatsapp" | "sms">("whatsapp");
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [selectionToken, setSelectionToken] = useState("");
   const [candidates, setCandidates] = useState<Array<{ id: string; patientId: string; name: string; age?: number; dateOfBirth?: string }>>([]);
@@ -43,18 +44,20 @@ function LoginInner() {
     return () => clearTimeout(t);
   }, [resendIn]);
 
-  const requestOtp = async () => {
+  const requestOtp = async (forceChannel?: "whatsapp" | "sms") => {
     const digits = mobile.replace(/\D/g, "");
     if (digits.length < 10) { setMsg("Enter a valid 10-digit mobile number"); return; }
     setBusy(true); setMsg("");
     try {
       const r = await fetch("/api/patient/auth/request-otp", {
         method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include",
-        body: JSON.stringify({ mobile: digits, ...(hid ? { hospitalId: hid } : { slug }) }),
+        body: JSON.stringify({ mobile: digits, ...(hid ? { hospitalId: hid } : { slug }), channel: forceChannel }),
       });
       const d = await r.json();
       if (d.success) {
-        setStep(2); setResendIn(30);
+        setStep(2);
+        setOtpChannel(d.data?.channel || "whatsapp");
+        setResendIn(60);
         setTimeout(() => otpRefs.current[0]?.focus(), 100);
       } else setMsg(d.message || "Failed to send OTP");
     } catch { setMsg("Connection error. Please try again."); }
@@ -245,6 +248,21 @@ function LoginInner() {
                 <button onClick={() => { setStep(1); setOtp(["", "", "", "", "", ""]); }} className="flex items-center gap-1.5 text-secondary-500 text-sm font-semibold mb-4 hover:text-secondary-700">
                   <ArrowLeft className="w-4 h-4" /> Change number
                 </button>
+                <div className="mb-5 p-3 rounded-xl border border-white/10 bg-secondary-900/40 text-sm">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`w-2 h-2 rounded-full ${otpChannel === "whatsapp" ? "bg-green-500" : "bg-blue-500"}`} />
+                    <span className="font-medium text-slate-200">OTP sent via {otpChannel === "whatsapp" ? "WhatsApp" : "SMS"}</span>
+                  </div>
+                  {otpChannel === "whatsapp" && (
+                    <button
+                      onClick={() => requestOtp("sms")}
+                      disabled={resendIn > 0 || busy}
+                      className="w-full mt-2 text-xs font-medium text-primary-400 hover:text-primary-300 underline underline-offset-4"
+                    >
+                      Didn&apos;t receive OTP on WhatsApp? Send via SMS
+                    </button>
+                  )}
+                </div>
                 <div className="flex gap-2 justify-center mb-5">
                   {otp.map((d, i) => (
                     <input key={i} ref={(el) => { otpRefs.current[i] = el; }} type="tel" inputMode="numeric" maxLength={1} value={d}
@@ -254,7 +272,7 @@ function LoginInner() {
                   ))}
                 </div>
                 <Button className="w-full" onClick={() => verifyOtp()} isLoading={busy} leftIcon={<ShieldCheck className="w-4 h-4" />}>Verify & Sign In</Button>
-                <Button variant="ghost" className="w-full mt-3" onClick={requestOtp} disabled={resendIn > 0 || busy}>
+                <Button variant="ghost" className="w-full mt-3" onClick={() => requestOtp()} disabled={resendIn > 0 || busy}>
                   {resendIn > 0 ? `Resend OTP in ${resendIn}s` : (<><RefreshCw className="w-4 h-4" /> Resend OTP</>)}
                 </Button>
               </>

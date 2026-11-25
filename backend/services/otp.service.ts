@@ -3,6 +3,7 @@ import { generateOTP } from "../utils/otp";
 import nodemailer from "nodemailer";
 import { env } from "../config/env";
 import { sendOTPviaWhatsApp } from "../utils/whatsapp";
+import { sendOTPviaSMS } from "../utils/sms";
 
 const isProd = () => process.env.NODE_ENV === "production";
 
@@ -152,18 +153,45 @@ export const verifyOTP = async (email: string, otp: string) => {
 };
 
 /* ── Patient mobile login OTP ───────────────────────────────
-   Sends OTP to the patient's mobile via WhatsApp (renflair.in API). */
-export const requestMobileOTP = async (mobile: string) => {
+   Tries WhatsApp first, falls back to SMS if WhatsApp delivery fails.
+   Pass channel "sms" to force SMS only. */
+export const requestMobileOTP = async (mobile: string, channel?: "whatsapp" | "sms") => {
   const otp = generateOTP();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
   await createOTP({ email: `patient:${mobile}`, mobile, otp, expiresAt } as any);
 
+  // Force SMS only
+  if (channel === "sms") {
+    const smsResult = await sendOTPviaSMS(mobile, otp);
+    return {
+      message: smsResult.success ? "OTP sent successfully via SMS" : "OTP generated but SMS delivery failed",
+      channel: "sms",
+      sms: { success: smsResult.success, messageId: smsResult.messageId, error: smsResult.error },
+      whatsapp: { success: false, error: "Not attempted" },
+    };
+  }
+
+  // Default: try WhatsApp first
   const whatsappResult = await sendOTPviaWhatsApp(mobile, otp);
 
+  if (whatsappResult.success) {
+    return {
+      message: "OTP sent successfully via WhatsApp",
+      channel: "whatsapp",
+      sms: { success: false, error: "Not attempted" },
+      whatsapp: { success: true, messageId: whatsappResult.messageId, error: whatsappResult.error },
+    };
+  }
+
+  // WhatsApp failed → fall back to SMS
+  const smsResult = await sendOTPviaSMS(mobile, otp);
+
   return {
-    message: whatsappResult.success ? "OTP sent successfully via WhatsApp" : "OTP generated but WhatsApp delivery failed",
-    sms: { success: whatsappResult.success, messageId: whatsappResult.messageId, error: whatsappResult.error },
+    message: smsResult.success ? "OTP sent via SMS (WhatsApp failed)" : "OTP generated but delivery failed on both channels",
+    channel: smsResult.success ? "sms" : "whatsapp",
+    sms: { success: smsResult.success, messageId: smsResult.messageId, error: smsResult.error },
+    whatsapp: { success: false, error: whatsappResult.error },
   };
 };
 

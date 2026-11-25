@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { successResponse, errorResponse } from "../../../../../../backend/utils/response";
 import { requestMobileOTP } from "../../../../../../backend/services/otp.service";
+import { findLatestMobileOTP } from "../../../../../../backend/repositories/otp.repo";
 import prisma from "../../../../../../backend/config/db";
 import { z } from "zod";
 
@@ -10,7 +11,10 @@ const schema = z.object({
   mobile: z.string().trim().min(10, "Enter a valid 10-digit mobile number").max(15),
   hospitalId: z.string().optional(),
   slug: z.string().optional(),
+  channel: z.enum(["whatsapp", "sms"]).optional(),
 });
+
+const COOLDOWN_SECONDS = 60;
 
 export async function POST(req: NextRequest) {
   try {
@@ -18,7 +22,7 @@ export async function POST(req: NextRequest) {
     if (!parsed.success) {
       return errorResponse(parsed.error.issues[0]?.message || "Valid mobile number is required", 400);
     }
-    const { mobile, hospitalId: hidIn, slug } = parsed.data;
+    const { mobile, hospitalId: hidIn, slug, channel } = parsed.data;
 
     let hid = hidIn || null;
     if (!hid && slug) {
@@ -56,12 +60,24 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const result = await requestMobileOTP(digits);
+    // 1-minute cooldown: check if an OTP was created recently
+    const latestOTP = await findLatestMobileOTP(digits);
+    if (latestOTP) {
+      const createdAt = new Date(latestOTP.expiresAt.getTime() - 10 * 60 * 1000); // expiresAt = createdAt + 10min
+      const elapsed = (Date.now() - createdAt.getTime()) / 1000;
+      if (elapsed < COOLDOWN_SECONDS) {
+        return errorResponse(`Please wait ${Math.ceil(COOLDOWN_SECONDS - elapsed)}s before requesting another OTP`, 429);
+      }
+    }
+
+    const result = await requestMobileOTP(digits, channel);
     return successResponse(
       {
-        sent: result.sms?.success ?? false,
+        sent: result.sms?.success ?? result.whatsapp?.success ?? false,
+        channel: result.channel,
         maskedMobile: `••••• ${digits.slice(-4)}`,
         sms: result.sms,
+        whatsapp: result.whatsapp,
       },
       result.message
     );

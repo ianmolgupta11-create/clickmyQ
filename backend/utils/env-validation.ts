@@ -110,6 +110,24 @@ export const validateWhatsAppEnv = () => {
 };
 
 /**
+ * Validates SMS configuration at runtime when SMS OTP features are initialized.
+ * Called lazily — not during Next.js build / static page generation.
+ */
+export const validateSmsEnv = () => {
+  if (!isProduction()) {
+    return { ok: true };
+  }
+  const errors: string[] = [];
+  if (!process.env.SMS_API_KEY) {
+    errors.push("SMS configuration (SMS_API_KEY) is required in production for SMS OTP delivery");
+  }
+  if (errors.length > 0) {
+    return { ok: false, errors };
+  }
+  return { ok: true };
+};
+
+/**
  * Validates Cloudinary configuration at runtime when file upload features are initialized.
  * Called lazily — not during Next.js build / static page generation.
  */
